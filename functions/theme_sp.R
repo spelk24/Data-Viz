@@ -1,3 +1,6 @@
+# ----------------------- #
+# --- SP GGPLOT Theme --- #
+# ----------------------- #
 
 theme_sp <- function(
     title_family = "Inter",
@@ -69,6 +72,7 @@ theme_sp <- function(
     # ---------------- #
     # --- DEV MODE --- #
     # ---------------- #
+    #' *More changes to come*
     ggplot2::theme_minimal(base_size = base_size) +
       ggplot2::theme(
         text = element_text(family = text_family,
