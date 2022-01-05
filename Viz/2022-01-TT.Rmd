@@ -1,0 +1,94 @@
+---
+title: "#TidyTuesday 2021-01"
+author: "Stephen Pelkofer"
+date: "1/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup & Libs
+
+```{r message=FALSE}
+library(tidyverse)
+library(jsonlite)
+library(rjson)
+library(httr)
+library(lubridate)
+library(ggtext)
+source("../functions/peloton-api.R")
+source("../functions/theme_sp.R")
+
+username <- "spelkofer"
+```
+
+# Use Custom Peloton API Functions
+
+```{r}
+# Pull Data
+# Don't store password
+all_workouts <- pull_all_workouts(username, rstudioapi::askForPassword("Enter your pw"))
+cycling_workouts <- all_workouts %>%
+  filter(workout_type == "cycling")
+```
+
+# Data Wrangling
+
+```{r}
+cycling_output_numbers <- cycling_workouts %>% 
+  # Remove Cool-downs and non-instructor rides
+  filter(
+    !str_detect(workout_title, "Cool Down"),
+    instructor_id != "None"
+  ) %>% 
+  # order by date ASC
+  arrange(workout_start_time) %>% 
+  mutate(
+    # ride number
+    ride_number = row_number(),
+    # Duration in Minutes
+    duration = duration_seconds/60,
+    # Add Percentile
+    percentile = 1 - round(leaderboard_rank/total_users, 3),
+    # Work/Min
+    work_per_min = round(total_work/1000/duration, 2)
+  )
+```
+
+
+# TT Viz
+
+```{r}
+# Extra work done with annotations in figma
+ggplot(cycling_output_numbers) +
+  geom_line(
+    aes(x = ride_number, y = work_per_min),
+    color = "#E40C2B",
+    size = .8,
+    alpha = .7
+  ) +
+  geom_point(
+    aes(x = ride_number, y = work_per_min),
+    color = "#E40C2B",
+    size = 2.2,
+    alpha = .8
+  ) +
+  scale_y_continuous(
+    limits = c(4, max(cycling_output_numbers$work_per_min)*1.2),
+    breaks = function(x) seq(ceiling(x[1]), floor(x[2]), by = 3),
+    expand = c(0,0)
+  ) +
+  scale_x_continuous(
+    breaks = function(x) seq(ceiling(x[1]), floor(x[2]), by = 2)
+  ) +
+  labs(
+    title = "Peloton Rides Reaching a Plateau",
+    subtitle = "Work/Min = (Output x Resistance)/Minutes",
+    caption = "Data Source: Peloton API | @spelk24",
+    y = "Work/Min",
+    x = "Ride Number"
+  ) +
+  theme_sp(base_size = 12, plots_pane = TRUE, md = TRUE)
+```
