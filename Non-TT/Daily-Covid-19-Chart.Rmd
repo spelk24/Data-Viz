@@ -1,0 +1,117 @@
+---
+title: "USA-Covid-Cases"
+author: "Stephen Pelkofer"
+date: "1/7/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r message = FALSE}
+# NYT repository: https://github.com/nytimes/covid-19-data
+library(tidyverse)
+library(lubridate)
+library(zoo)
+library(tibbletime)
+source("../functions/theme_sp.R")
+
+# County level
+county_data <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv")
+names(county_data) <- c("Date","County","State","FIPS","Cases","Deaths")
+```
+
+# Data Prep
+
+```{r}
+# Helper function
+rolling7 <- rollify(mean, window = 7, na_value = 0) # rolling 7-day average
+```
+
+
+```{r}
+# Group by Country (US Only)
+daily_country_data <- county_data %>%
+  # Group by date to get cases and death (cumulative)
+  # for the entire US
+  group_by(Date) %>% 
+  summarise(
+    Cases = sum(Cases, na.rm = T),
+    Deaths = sum(Deaths, na.rm = T),
+    .groups = "drop_last"
+  ) %>%
+  arrange(Date) %>% 
+  select(Date,Cases,Deaths) %>% 
+  mutate(
+    # Calculate new cases and deaths by loking at
+    # totals from previous day
+    New_Cases = Cases - lag(Cases, default = 0),
+    New_Deaths = Deaths - lag(Deaths, default = 0),
+    # Data anomoly on 6/4/21 according to NYT
+    ## https://www.nytimes.com/interactive/2021/us/covid-cases.html
+    New_Cases = ifelse(Date == "2021-06-04", 14561, New_Cases),
+    # Rolling 7 Day Avg
+    Rolling7Cases = round(rolling7(New_Cases)),
+    Rolling7Deaths = round(rolling7(New_Deaths))
+  ) %>%
+  # FIll in missing dates (beginning of 2020)
+  complete(Date = seq.Date(as.Date("2020-01-01"), max(Date), by="day")) %>%
+  # replace missing info with 0
+  replace(is.na(.), 0) %>%
+  mutate(
+    # Get Year from date
+    Year = as.factor(lubridate::year(Date))
+  ) %>% 
+  # Group by year
+  group_by(Year) %>% 
+  # Row number for day of year (used for line plot later)
+  mutate(day_of_year = row_number()) %>% 
+  ungroup() %>% 
+  arrange(Date)
+```
+
+# Daily Case Viz
+
+```{r}
+ggplot(daily_country_data) +
+  # Lines by year
+  geom_line(
+    aes(x = day_of_year, y = New_Cases, color = Year),
+    alpha = .8,
+    size = .8
+  ) +
+  # Customm Y labels
+  scale_y_continuous(
+    breaks = c(200000,400000,600000,800000,1000000),
+    labels = c("200,000", "400,000", "600,000", "800,000", "1M Cases")
+  ) +
+  # Custom X-Axis
+  scale_x_continuous(
+    breaks = c(0,91,182,274, 365),
+    labels = c("JAN 1", "APR 1", "JUL 1", "OCT 1", "DEC 31")
+  ) +
+  # Custom Color Pal
+  scale_color_manual(
+    values=c(
+      "2020" = "#3CBCC3", 
+      "2021" = "#EBA63F",
+      "2022" = "#438945"
+    )
+  ) +
+  labs(
+    title = "Daily Covid-19 Cases in the U.S.",
+    subtitle = "As of January 6th, 2022",
+    caption = "Data Source: github.com/nytimes/covid-19-data | @spelk24",
+    x = "",
+    y = "",
+    color = ""
+  ) +
+  theme_sp(title_family = "Arial", text_family = "Arial") +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank()
+  )
+```
