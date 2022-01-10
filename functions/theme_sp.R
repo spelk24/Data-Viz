@@ -3,8 +3,8 @@
 # ----------------------- #
 
 theme_sp <- function(
-    title_family = "Inter",
-    text_family = "Inter",
+    title_family = "Arial",
+    text_family = "Arial",
     base_size = 13, text_color = "#252525",
     bg_color = "#F7F7F7", line_color = "#252525",
     plot_margin = margin(20,20,20,20),

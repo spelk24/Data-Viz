@@ -1,0 +1,133 @@
+---
+title: "Klay Day"
+author: "Stephen Pelkofer"
+date: "1/9/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r message = FALSE, warning=FALSE}
+library(tidyverse)
+library(nbastatR)
+library(lubridate)
+source("../functions/theme_sp.R")
+source("../functions/nba-stats-api.R")
+```
+
+# Data Prep
+
+## Get Game Logs
+
+```{r}
+game_logs <- tibble()
+
+for (year in 1979:2022) {
+  # Pull single season player game logs
+  game_logs <- bind_rows(
+    game_logs,
+    get_game_logs(season = year)
+  )
+}
+```
+
+## Top 3PM Players
+
+```{r}
+# Identify top 10 3PM of all time
+top_10_players <- game_logs %>%
+  group_by(PLAYER_ID, PLAYER_NAME) %>%
+  summarise(
+    seasons = n_distinct(SEASON_ID),
+    games = n(),
+    total_3pm = sum(as.integer(FG3M), na.rm = T),
+    .groups = "drop"
+  ) %>% 
+  arrange(desc(total_3pm)) %>% 
+  head(10) %>% 
+  pull(PLAYER_ID)
+```
+
+## 3PM by Game
+
+```{r}
+# Group by player to get cumulative threes at each game number
+threes_by_game <- game_logs %>% 
+  mutate(GAME_DATE = as.Date(GAME_DATE)) %>% 
+  filter(PLAYER_ID %in% top_10_players) %>% 
+  group_by(PLAYER_ID, PLAYER_NAME) %>% 
+  arrange(PLAYER_ID, GAME_DATE) %>% 
+  mutate(
+    game_number = row_number(),
+    max_game = max(game_number),
+    cumulative_threes = cumsum(FG3M)
+  ) %>% 
+  select(PLAYER_ID, PLAYER_NAME, game_number, FG3M, cumulative_threes, max_game)
+
+# Klay Threes by Game
+klay_id <- 202691
+kt_threes_by_game <- game_logs %>% 
+  mutate(GAME_DATE = as.Date(GAME_DATE)) %>% 
+  filter(PLAYER_ID == klay_id) %>% 
+  group_by(PLAYER_ID, PLAYER_NAME) %>% 
+  arrange(PLAYER_ID, GAME_DATE) %>% 
+  mutate(
+    game_number = row_number(),
+    max_game = max(game_number),
+    cumulative_threes = cumsum(FG3M)
+  ) %>% 
+  select(PLAYER_ID, PLAYER_NAME, game_number, FG3M, cumulative_threes, max_game)
+```
+
+# Data Viz
+
+```{r}
+ggplot(threes_by_game) +
+  # Top 10
+  geom_line(
+    aes(x = game_number, y = cumulative_threes, group = PLAYER_NAME),
+    size = .7,
+    alpha = .6,
+    color = "#bdbdbd"
+  ) +
+  geom_point(
+    data = threes_by_game %>% filter(game_number == max_game),
+    aes(x = game_number, y = cumulative_threes),
+    size = 2,
+    color = "#bdbdbd"
+  ) +
+  # Klay
+  geom_line(
+    data = kt_threes_by_game,
+    aes(x = game_number, y = cumulative_threes, group = PLAYER_NAME),
+    size = 1.2,
+    alpha = 1,
+    color = "#EBA63F"
+  ) +
+  geom_point(
+    data = kt_threes_by_game %>% filter(game_number == max_game),
+    aes(x = game_number, y = cumulative_threes),
+    size = 3,
+    color = "#EBA63F"
+  ) +
+  scale_y_continuous(expand = c(0,0), limits = c(0,3200)) +
+  scale_x_continuous(
+    limits = c(0,1550),
+    expand = c(0,0),
+    breaks = c(300,600,900,1200,1500),
+    labels = c("300 Games","600","900","1200","1500")
+  ) +
+  labs(
+    title = "<span style = 'color:#EBA63F;'>Klay</span> can catch Ray too...",
+    subtitle = "Top 10 in Total 3PM in NBA History",
+    caption = "Data Source: nba.com/stats | Viz: @spelk24",
+    y = "Total 3PM",
+    x = ""
+  ) +
+  theme_sp(md = TRUE)
+# Additional annotations added in Figma
+```
