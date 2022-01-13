@@ -1,0 +1,167 @@
+---
+title: "Recieving-Yards-Distributions"
+author: "Stephen Pelkofer"
+date: "1/8/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Setup
+
+```{r message = FALSE, warning=FALSE}
+library(tidyverse)
+library(nflfastR)
+library(lubridate)
+source("../functions/theme_sp.R")
+```
+
+
+# Get Player Data
+
+```{r message=FALSE}
+nfl_pbp <- load_pbp(2021)
+```
+
+```{r}
+# D.Adamas (GB)
+player_id <- "00-0031381"
+player <- "Davante Adams"
+team_color <- "#24423C"
+
+# Player Specific
+## 123 receptions matches nfl.com
+player_receptions <- nfl_pbp %>% 
+  # Filter to player and regular season
+  filter(
+    season_type == "REG", 
+    receiver_player_id == player_id,
+    !is.na(receiving_yards)
+  ) %>% 
+  select(
+    game_id, season_type, week,
+    result, success,
+    receiver_player_id, receiver_player_name, receiving_yards,
+    air_yards, yards_after_catch
+  ) %>% 
+  mutate(
+    receiving_yards = case_when(
+      receiving_yards < 0 ~ 0, # Change negative yards to 0
+      receiving_yards > 30 ~ 30, # Group >= 30
+      TRUE ~ receiving_yards
+    )
+  )
+
+n_receptions <- nrow(player_receptions)
+```
+
+# Data Prep
+
+```{r}
+# Group by distance
+distance_summary <- player_receptions %>% 
+  group_by(receiving_yards) %>% 
+  summarise(
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    # For geom_point
+    dummy_0 = 0,
+    bin_size = factor(
+        case_when(
+        n <= 3 ~ "0-3",
+        n <= 7 ~ "4-7",
+        n >= 8 ~ "8+",
+        TRUE ~ "None"
+      ),
+      levels = c("0-3","4-7", "8+")
+    ),
+    curve_size = case_when(
+      n <= 3 ~ .25,
+      n <= 7 ~ .5,
+      n >= 8 ~ 1,
+      TRUE ~ 0
+    )
+  )
+
+# Median Shot Distance
+med_dist <- median(player_receptions$receiving_yards)
+```
+
+
+# Data Viz
+
+```{r}
+p <- ggplot() +
+  scale_y_continuous(limits = c(-.04,1), expand = c(0,0)) +
+  scale_x_continuous(
+    limits = c(0,32),
+    breaks = c(0,10,20,30),
+    labels = c("0 YARDS", "10", "20", "30+")
+  ) +
+  geom_segment(
+    aes(x = med_dist, y = 0, xend = med_dist, yend = 1),
+    color = "#252525",
+    size = .3,
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    aes(yintercept = 0),
+    color = "#252525",
+    size = .9
+  ) +
+  labs(
+    title = glue::glue("{player} Reception Distances"),
+    subtitle = glue::glue("2021 NFL Season: {n_receptions} receptions"),
+    x = "",
+    size = "Receptions",
+    y = ""
+  ) +
+  theme_sp() +
+  theme(
+    axis.line = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid = element_blank()
+  )
+
+
+for (row in 1:nrow(distance_summary)) {
+  curve_data <- tibble(
+    distance = distance_summary$receiving_yards[row],
+    curve_size = distance_summary$curve_size[row]
+  )
+
+  if (curve_data$distance != 0) {
+    p <- p +
+    geom_curve(
+      data = curve_data,
+      aes(
+        x = 0, 
+        y = 0, 
+        xend = distance, 
+        yend = 0
+      ), 
+      colour = team_color, 
+      size = distance_summary$curve_size[row],
+      curvature = -.95
+    )
+  }
+}
+
+p +
+  geom_point(
+    data = distance_summary,
+    aes(x = receiving_yards, y = dummy_0, size = bin_size),
+    shape = 21,
+    color = "white",
+    fill = team_color,
+    alpha = 1
+  ) +
+  scale_size_discrete(
+    range = c(2,7)
+  )
+```
