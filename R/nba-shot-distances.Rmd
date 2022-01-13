@@ -1,0 +1,149 @@
+---
+title: "Shot-Distance-Distributions"
+author: "Stephen Pelkofer"
+date: "1/8/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Setup
+
+```{r message = FALSE, warning=FALSE}
+library(tidyverse)
+library(nbastatR)
+library(lubridate)
+source("../functions/theme_sp.R")
+source("../functions/nba-stats-api.R")
+```
+
+
+# Get Season Shots
+
+```{r player_data}
+#| message=FALSE
+
+player <- "LeBron James"
+team <- "1610612747"
+team_color <- "#552582"
+
+assign_nba_teams()
+player_shots <- nbastatR::teams_shots(seasons = 2022, team_ids = c(team)) %>% 
+  filter(namePlayer == player)
+
+n_shots <- nrow(player_shots)
+```
+
+# Data Prep
+
+```{r}
+# Group by distance
+distance_summary <- player_shots %>% 
+  group_by(distanceShot) %>% 
+  summarise(
+    n = n(),
+    makes = sum(ifelse(isShotMade, 1, 0)),
+    fg_pct = round(makes/n,3),
+    .groups = "drop"
+  ) %>% 
+  mutate(
+    # For geom_point
+    dummy_0 = 0,
+    shot_size = case_when(
+      n <= 10 ~ "0-10",
+      n <= 20 ~ "11-20",
+      n <= 30 ~ "21-30",
+      n > 30 ~ "31+",
+      TRUE ~ "None"
+    ),
+    curve_size = case_when(
+      n <= 10 ~ .25,
+      n <= 20 ~ .5,
+      n <= 30 ~ .75,
+      n > 30 ~ 1,
+      TRUE ~ 0
+    )
+  ) %>% 
+  # Shots inside half-court
+  filter(distanceShot <= 42)
+
+# Median Shot Distance
+med_dist <- median(player_shots$distanceShot)
+```
+
+# Data Viz
+
+```{r}
+p <- ggplot() +
+  scale_y_continuous(limits = c(-.04,1), expand = c(0,0)) +
+  scale_x_continuous(
+    limits = c(0,42),
+    breaks = c(0,10,20,30,40),
+    labels = c("0 FT", "10", "20", "30", "40")
+  ) +
+  geom_segment(
+    aes(x = med_dist, y = 0, xend = med_dist, yend = 1),
+    color = "#252525",
+    size = .3,
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    aes(yintercept = 0),
+    color = "#252525",
+    size = .9
+  ) +
+  labs(
+    title = glue::glue("{player} Shot Distances"),
+    subtitle = glue::glue("2021-22 Season: {n_shots} shots"),
+    x = "",
+    size = "Shots",
+    y = ""
+  ) +
+  theme_sp() +
+  theme(
+    axis.line = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid = element_blank()
+  )
+
+
+for (row in 1:nrow(distance_summary)) {
+  curve_data <- tibble(
+    distance = distance_summary$distanceShot[row],
+    curve_size = distance_summary$curve_size[row]
+  )
+
+  if (curve_data$distance != 0) {
+    p <- p +
+    geom_curve(
+      data = curve_data,
+      aes(
+        x = 0, 
+        y = 0, 
+        xend = distance, 
+        yend = 0
+      ), 
+      colour = team_color, 
+      size = distance_summary$curve_size[row],
+      curvature = -.95
+    )
+  }
+}
+
+p +
+  geom_point(
+    data = distance_summary,
+    aes(x = distanceShot, y = dummy_0, size = shot_size),
+    shape = 21,
+    color = "white",
+    fill = team_color,
+    alpha = 1
+  ) +
+  scale_size_discrete(
+    #breaks = c(0,10,20,30),
+    range = c(2,5)
+  )
+```
