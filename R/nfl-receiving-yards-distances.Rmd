@@ -32,15 +32,27 @@ player_id <- "00-0031381"
 player <- "Davante Adams"
 team_color <- "#24423C"
 
+# C.Kupp (LAR)
+player_id <- "00-0033908"
+player <- "Cooper Kupp"
+team_color <- "#003594"
+
+# J.Jefferson (MIN)
+player_id <- "00-0036322"
+player <- "Justin Jefferson"
+team_color <- "#4F2683"
+
 # Player Specific
-## 123 receptions matches nfl.com
+## 123 receptions matches nfl.com (DA)
+## 145 receptions matches nfl.com (CK)
+## 108 receptions matches nfl.com (JJx)
 player_receptions <- nfl_pbp %>% 
   # Filter to player and regular season
   filter(
     season_type == "REG", 
     receiver_player_id == player_id,
     !is.na(receiving_yards)
-  ) %>% 
+  )  %>% 
   select(
     game_id, season_type, week,
     result, success,
@@ -89,7 +101,7 @@ distance_summary <- player_receptions %>%
   )
 
 # Median Shot Distance
-med_dist <- median(player_receptions$receiving_yards)
+med_dist <- round(median(player_receptions$receiving_yards))
 ```
 
 
