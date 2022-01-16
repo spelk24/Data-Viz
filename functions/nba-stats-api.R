@@ -224,6 +224,34 @@ pacman::p_load(janitor)
   
   url <- glue::glue("https://stats.nba.com/stats/leaguedashptstats?College=&Conference=&Country=&DateFrom=&DateTo=&Division=&DraftPick=&DraftYear=&GameScope=&Height=&LastNGames=0&LeagueID=00&Location=&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PerMode=Totals&PlayerExperience=&PlayerOrTeam=Player&PlayerPosition=&PtMeasureType={category}&Season={season_url}&SeasonSegment=&SeasonType={season_type_url}&StarterBench=&TeamID=0&VsConference=&VsDivision=&Weight=")
   
+}
+
+.team_shots_touch_time_url <- function(season, season_type = "Regular Season", category){
+  
+  ###
+  # Creates NBA API Shots touch time URL for given season and touch category (0-2,3-6, 6+)
+  #
+  # Inputs:
+  #   season: int
+  #   season_type: str (Regular Season, PlayIn, Playoffs)
+  #   category: str ("quick", "mid", "long")
+  #
+  # Returns:
+  #   url:(str)
+  #
+  ###
+  
+  category <- case_when(
+    category == "early" ~ "Touch+%3C+2+Seconds",
+    category == "mid" ~ "Touch+2-6+Seconds",
+    category == "long" ~ "Touch+6%2B+Seconds",
+    TRUE ~ ""
+  )
+  
+  season_url = str_c(season-1, str_sub(season,3,4), sep = "-")
+  season_type_url  <- URLencode(season_type)
+  
+  url <- glue::glue("https://stats.nba.com/stats/leaguedashteamptshot?CloseDefDistRange=&Conference=&DateFrom=&DateTo=&Division=&DribbleRange=&GameSegment=&GeneralRange=&LastNGames=&LeagueID=00&Location=&Month=&OpponentTeamID=&Outcome=&PORound=&PerMode=Totals&Period=&Season={season_url}&SeasonSegment=&SeasonType={season_type_url}&ShotClockRange=&ShotDistRange=&TeamID=&TouchTimeRange={category}&VsConference=&VsDivision=")
   
 }
 
@@ -524,6 +552,36 @@ get_tracking_stats <- function(season, season_type = "Regular Season", category)
     janitor::clean_names()
   
   return(tracking_df)
+  
+}
+
+get_team_shots_by_touch_time <- function(season, season_type = "Regular Season", category){
+  
+  ###
+  # Calls API for Team Touch data for a given category
+  #
+  # Inputs:
+  #   season: int/str
+  #   season_type: str (Default: Regular Season)
+  #   category: str (early, mid, long)
+  #
+  # Returns:
+  #   touch_df: dataframe
+  #
+  ###
+  
+  #Call API
+  res <- .curl_nba_api(.team_shots_touch_time_url(season, season_type, category))
+  #Isolate Data
+  touch_df <- res[["resultSets"]][["rowSet"]][[1]] %>% 
+    as.data.frame()
+  #Add column names to Data
+  colnames(touch_df) <-  res[["resultSets"]][["headers"]][[1]]
+  #Clean up column names
+  touch_df <- touch_df %>% 
+    janitor::clean_names()
+  
+  return(touch_df)
   
 }
 
