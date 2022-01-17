@@ -16,9 +16,9 @@ The top MVP candidates score in different ways.
 
 A different way to visualize receiving yards.
 
-![](R/img/D.Adams Reception Distances.png)
+![](R/img/D.Adams-Reception-Distances.png)
 
-![](R/img/C.Kupp Reception Distances.png)
+![](R/img/C.Kupp-Reception-Distances.png)
 
 ### Klay Day!
 
