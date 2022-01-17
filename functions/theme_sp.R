@@ -42,7 +42,7 @@ theme_sp <- function(
       plot.margin = plot_margin,
       plot.background = element_rect(fill = bg_color, color = bg_color),
       axis.text = element_text(size = base_size),
-      axis.title = ggtext::element_markdown(size = base_size * 1.2, lineheight = 1.2),
+      axis.title = ggtext::element_markdown(size = base_size * 1.1, lineheight = 1.2),
       axis.line = element_line(color = line_color),
       legend.title = ggtext::element_markdown(size = base_size * 1.2),
       legend.text = element_text(size = base_size * 1.1)
@@ -56,7 +56,7 @@ theme_sp <- function(
       line = element_line(color = line_color),
       plot.title = ggtext::element_markdown(face = "bold", lineheight = 1.2),
       plot.title.position = "plot",
-      plot.subtitle = ggtext::element_markdown(lineheight = 1.2),
+      plot.subtitle = ggtext::element_markdown(lineheight = 1, size = base_size),
       plot.margin = plot_margin,
       plot.background = element_rect(fill = bg_color, color = bg_color),
       axis.line = element_line(color = line_color),

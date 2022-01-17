@@ -1,0 +1,178 @@
+---
+title: "NBA MVP Candidates"
+author: "Stephen Pelkofer"
+date: "1/16/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Setup
+
+```{r message = FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(showtext)
+source("../functions/theme_sp.R")
+source("../functions/nba-stats-api.R")
+font_add_google(name = "Sora", family = "Sora")
+```
+
+
+# Get Season Shots
+
+```{r}
+# Get all synergy playtype stats from here: https://www.nba.com/stats/players/{category}
+transition_numbers <- get_synergy_stats(2022, "Regular Season", "Transition")
+iso_numbers <- get_synergy_stats(2022, "Regular Season", "Isolation")
+pnr_bh_numbers <- get_synergy_stats(2022, "Regular Season", "PRBallHandler")
+pnr_sc_numbers <- get_synergy_stats(2022, "Regular Season", "PRRollman")
+postup_numbers <- get_synergy_stats(2022, "Regular Season", "Postup")
+spotup_numbers <- get_synergy_stats(2022, "Regular Season", "Spotup")
+handoff_numbers <- get_synergy_stats(2022, "Regular Season", "Handoff")
+cut_numbers <- get_synergy_stats(2022, "Regular Season", "Cut")
+offscreen_numbers <- get_synergy_stats(2022, "Regular Season", "OffScreen")
+putbacks_numbers <- get_synergy_stats(2022, "Regular Season", "OffRebound")
+misc_numbers <- get_synergy_stats(2022, "Regular Season", "Misc")
+
+# Bind All together
+all_playtype_data <- bind_rows(
+  transition_numbers,
+  iso_numbers,
+  pnr_bh_numbers,
+  pnr_sc_numbers,
+  postup_numbers,
+  spotup_numbers,
+  handoff_numbers,
+  cut_numbers,
+  offscreen_numbers
+  #putbacks_numbers, <-- Excluding these
+  #misc_numbers <-- Exclusing these
+)
+```
+
+# Data Prep
+
+```{r}
+# 5 of top 7 favorites in NBA MVP odds from Draftkings
+## Excluded Ja Morant and DeMar Derozan
+mvp_list <- c(
+  203507, #Giannis
+  201939, # Steph
+  203999, # Jokic
+  201142, # Durant
+  2544, # LeBron
+  203954 # Embiid
+)
+
+# Create data for ggplot
+plot_data <- all_playtype_data %>% 
+  # Change cols to numeric
+  mutate_at(
+    c("gp", "fga", "fg_pct", "ppp", "poss_pct"),
+    as.numeric
+  ) %>% 
+  mutate(
+    # MVP List
+    mvp_candidate = ifelse(player_id %in% mvp_list, "Y", "N"),
+    # Change order and display of Play Types
+    play_type = factor(
+      play_type,
+      levels = c(
+        "Isolation",
+        "PRBallHandler",
+        "Transition",
+        "Postup",
+        "Handoff",
+        "PRRollMan",
+        "OffScreen",
+        "Cut",
+        "Spotup"
+      ),
+      labels = c(
+        "Iso",
+        "P&R Ball-Handler",
+        "Transition",
+        "Post-Up",
+        "Handoff",
+        "P&R Roll-Man",
+        "Off-Screen",
+        "Cut",
+        "Spot-Up"
+      )
+    )
+  ) %>% 
+  # Select relevant cols
+  select(
+    player_id, player_name, gp, play_type, 
+    fga, fg_pct, ppp, poss_pct, mvp_candidate
+  )
+```
+
+
+# Data Viz
+
+```{r}
+showtext_auto()
+ggplot() +
+  # All-Players
+  geom_point(
+    data = plot_data %>% filter(mvp_candidate == "N"),
+    aes(x = poss_pct, y = ppp),
+    fill = "#bdbdbd",
+    alpha = .8,
+    shape = 21,
+    color = "white",
+    size = 2
+  ) +
+  # MVP Candidates
+  geom_point(
+    data = plot_data %>% filter(mvp_candidate == "Y"),
+    aes(x = poss_pct, y = ppp, fill = player_name),
+    alpha = .8,
+    shape = 21,
+    color = "white",
+    size = 4
+  ) +
+  scale_fill_manual(
+    values = c(
+      "LeBron James" = "#552583",
+      "Stephen Curry" = "#FFC72C",
+      "Giannis Antetokounmpo" = "#00471B",
+      "Nikola Jokic" = "#0E2240",
+      "Kevin Durant" = "#000000",
+      "Joel Embiid" = "#006BB6"
+    )
+  ) +
+  scale_x_continuous(
+    labels = scales::percent_format(accuracy = 1)
+  ) +
+  scale_y_continuous(
+    limits = c(.2,2),
+    breaks = c(.5, 1, 1.5, 2),
+    labels = c("0.5", "1.0", "1.5", "2.0")
+  ) +
+  facet_wrap(~play_type, scales = "free") +
+  labs(
+    title = "The top MVP Candidates score in different ways",
+    subtitle = "Minimum of 10 min/game and 10 possessions per play type to qualify",
+    y = "Points-Per-Possession",
+    x = "Percent of the Player's Posessions"
+  ) +
+  theme_sp(
+    plots_pane = FALSE,
+    title_family = "Sora",
+    text_family = "Sora",
+    base_size = 13
+  ) +
+  theme(
+    panel.grid.minor = element_blank(),
+    axis.text = element_text(size = 10),
+    strip.text = element_text(face = "bold"),
+    legend.position = "none"
+  ) +
+  ggsave("export.png",device = "png", width = 12, height = 8, dpi = 300)
+```
