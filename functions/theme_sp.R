@@ -5,7 +5,7 @@
 theme_sp <- function(
     title_family = "Arial",
     text_family = "Arial",
-    base_size = 13, text_color = "#252525",
+    base_size = 12, text_color = "#252525",
     bg_color = "#F7F7F7", line_color = "#252525",
     plot_margin = margin(20,20,20,20),
     plots_pane = TRUE,
@@ -36,15 +36,15 @@ theme_sp <- function(
       text = element_text(family = text_family, size = base_size, color = text_color),
       title = ggtext::element_markdown(family = title_family, color = text_color),
       line = element_line(color = line_color),
-      plot.title = ggtext::element_markdown(face = "bold", size = base_size * 2, lineheight = 1.2),
+      plot.title = ggtext::element_markdown(face = "bold", size = base_size * 1.6, lineheight = 1.2),
       plot.title.position = "plot",
       plot.subtitle = ggtext::element_markdown(size = base_size * 1.2, lineheight = 1.2),
       plot.margin = plot_margin,
       plot.background = element_rect(fill = bg_color, color = bg_color),
-      axis.text = element_text(size = base_size * 1.2),
-      axis.title = ggtext::element_markdown(size = base_size * 1.6),
+      axis.text = element_text(size = base_size),
+      axis.title = ggtext::element_markdown(size = base_size * 1.2, lineheight = 1.2),
       axis.line = element_line(color = line_color),
-      legend.title = ggtext::element_markdown(size = base_size * 1.3),
+      legend.title = ggtext::element_markdown(size = base_size * 1.2),
       legend.text = element_text(size = base_size * 1.1)
     )
   } else if (plots_pane == TRUE & md == TRUE) {
