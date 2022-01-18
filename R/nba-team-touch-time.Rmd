@@ -1,0 +1,106 @@
+---
+title: "Team Shots Touch Time"
+author: "Stephen Pelkofer"
+date: "1/16/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Setup
+
+```{r message = FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+source("../functions/theme_sp.R")
+source("../functions/nba-stats-api.R")
+```
+
+
+# Get Season Shots
+
+```{r player_data}
+# Quick Touch Shots (0-2 seconds)
+quick_shots <- get_team_shots_by_touch_time(2022, "Regular Season", "early") %>% 
+  mutate(touch_time = "0-2")
+
+# Mid Touch Shots (0-2 seconds)
+mid_shots <- get_team_shots_by_touch_time(2022, "Regular Season", "mid") %>% 
+  mutate(touch_time = "2-6")
+
+# Long Touch Shots (0-2 seconds)
+long_shots <- get_team_shots_by_touch_time(2022, "Regular Season", "long") %>% 
+  mutate(touch_time = "6+")
+
+# All Shots
+all_shots <- bind_rows(
+  quick_shots,
+  mid_shots,
+  long_shots
+)
+```
+
+# Data Viz
+
+```{r}
+# Prep data for plot
+plot_data <- all_shots %>% 
+  # Change vars to numeric
+  mutate_at(
+    c("fga_frequency", "fg_pct"),
+    as.numeric
+  ) %>% 
+  # Change levels of touch time
+  mutate(
+    touch_time = factor(
+      touch_time,
+      levels = c("6+", "2-6", "0-2")
+    )
+  ) %>% 
+  # Select relevant vars
+  select(
+    team_abr = team_abbreviation,
+    touch_time,
+    fga_frequency,
+    fg_pct
+  )
+
+# Teams sorted by highest 0-2 touch shots/game
+sort_levels <- plot_data %>% 
+  filter(touch_time == "0-2") %>% 
+  arrange(fga_frequency) %>% 
+  pull(team_abr)
+
+# Extra annotations added in Figma
+ggplot(plot_data) +
+  geom_col(
+    aes(
+      x = factor(team_abr, levels = sort_levels), 
+      y = fga_frequency, 
+      fill = touch_time
+    ),
+    position = "stack",
+    color = "white",
+    size = 1
+  ) +
+  scale_fill_manual(values = c("#3CBCC3", "#438945", "#EBA63F")) +
+  scale_y_continuous(expand = c(0,0)) +
+  coord_flip() +
+  labs(
+    title = "The Warriors get a lot of Quick-Touch Looks",
+    x = "",
+    y = "Percentage of Total Shots",
+    fill = "Touch TIme"
+  ) +
+  theme_sp() +
+  theme(
+    axis.text.y = element_text(size = 8),
+    legend.position = "None",
+    axis.line.x = element_blank(),
+    axis.ticks.x = element_line(color = "#252525")
+  )
+```
+

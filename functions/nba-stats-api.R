@@ -3,17 +3,18 @@
 # ------------- #
 
 # Load Packages
-pacman::p_load(tidyverse)
-pacman::p_load(magrittr)
-pacman::p_load(httr)
-pacman::p_load(jsonlite)
-pacman::p_load(dplyr)
-pacman::p_load(stringr)
-pacman::p_load(janitor)
+library(tidyverse)
+library(magrittr)
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(stringr)
+library(janitor)
 
 # nbastatR Function for Accessing the API
-.curl_nba_api <- function(url = "https://stats.nba.com/stats/leaguegamelog?Counter=1000&Season=2020-21&Direction=DESC&LeagueID=00&PlayerOrTeam=P&SeasonType=Regular%20Season&Sorter=DATE") {
+.curl_nba_api <- function(url = "https://stats.nba.com/stats/leaguegamelog?Counter=1000&Season=2021-22&Direction=DESC&LeagueID=00&PlayerOrTeam=P&SeasonType=Regular%20Season&Sorter=DATE") {
   
+  # API Headers
   headers <- c(
     `Host` = 'stats.nba.com',
     `User-Agent` = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv =72.0) Gecko/20100101 Firefox/72.0',
@@ -28,17 +29,17 @@ pacman::p_load(janitor)
     `Cache-Control` = 'no-cache'
   )
   
-  res <-
-    GET(url,
-        add_headers(.headers = headers))
+  # Request
+  res <-GET(
+    url,
+    add_headers(.headers = headers)
+  )
   
-  json <-
-    res$content %>%
+  json <- res$content %>%
     rawToChar() %>%
     fromJSON(simplifyVector = T)
   
-  json
-  
+  return(json)
 }
 
 # Contruct URLs -----------------------------------------------------------
@@ -76,27 +77,6 @@ pacman::p_load(janitor)
   end <- .calc_time_at_period(period + 1) + 5
   
   return(glue::glue("https://stats.nba.com/stats/boxscoreadvancedv2/?gameId={game_id}&startPeriod=0&endPeriod=14&startRange={start}&endRange={end}&rangeType=2"))
-}
-
-.advanced_stats_url <- function(season, season_type = "Regular Season", category){
-  
-  ###
-  # Creates NBA API Synergy Play Type URL for given season and category
-  #
-  # Inputs:
-  #   season: int
-  #   season_type: str (Regular Season, PlayIn, Playoffs)
-  #   category: str (one of tracking categories found in dropdown at https://www.nba.com/stats/players/advanced)
-  #
-  # Returns:
-  #   url:(str)
-  #
-  ###
-  
-  season_url <- str_c(season-1, str_sub(season,3,4), sep = "-")
-  season_type_url <- URLencode(season_type)
-  
-  url <- glue::glue("https://stats.nba.com/stats/leaguedashplayerstats?College=&Conference=&Country=&DateFrom=&DateTo=&Division=&DraftPick=&DraftYear=&GameScope=&GameSegment=&Height=&LastNGames=0&LeagueID=00&Location=&MeasureType={category}&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season={season_url}&SeasonSegment=&SeasonType={season_type_url}&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=&Weight=")
 }
 
 # Construct Game Logs URL
@@ -283,31 +263,17 @@ get_todays_nba_schedule <- function(){
   
   date <- json_resp[["scoreboard"]][["gameDate"]]
   
-  todays_games <- data.frame(home_team = str_to_title(json_resp[["scoreboard"]][["games"]][["homeTeam"]][["teamSlug"]]),
-                             away_team = str_to_title(json_resp[["scoreboard"]][["games"]][["awayTeam"]][["teamSlug"]]),
-                             date = date,
-                             time = as.POSIXct(json_resp[["scoreboard"]][["games"]][["gameEt"]], format = "%Y-%m-%dT%H:%M:%OS")) %>% 
+  todays_games <- data.frame(
+      home_team = str_to_title(json_resp[["scoreboard"]][["games"]][["homeTeam"]][["teamSlug"]]),
+      away_team = str_to_title(json_resp[["scoreboard"]][["games"]][["awayTeam"]][["teamSlug"]]),
+      date = date,
+      time = as.POSIXct(json_resp[["scoreboard"]][["games"]][["gameEt"]], format = "%Y-%m-%dT%H:%M:%OS")
+    ) %>% 
     rowwise() %>% 
     #Get sorted alphabetical matchup to inner join on dk_get_player_props
     mutate(matchup = paste(sort(trimws(strsplit(paste0(home_team, "-", away_team), '-')[[1]])), collapse='-'))
   
   return(todays_games)
-  
-}
-
-get_first_nba_game_today_time <- function(){
-  ###
-  #Get time of first NBA game of the day to time injury reports and scraping schedule
-  ###
-  sched <- get_todays_nba_schedule()
-  
-  #Convert datetime to 24-hour clock
-  min_time_24 <- format(as.POSIXct(min(sched$time)), format = "%H:%M:%S")
-  
-  #Convert 24-hour clock to 12-hour clock
-  min_time <- format(strptime(min_time_24, format='%H:%M:%S'), '%I:%M:%S %p')
-  
-  return(min_time)
 }
 
 # API Dataframe Construnction ---------------------------------------------
@@ -365,34 +331,6 @@ get_nba_adv_boxscore_qtr <- function(game_id, period){
     set_names(boxscore_names)
   
   return(boxscore_df)
-}
-
-get_advanced_stats <- function(season, season_type = "Regular Season", category){
-  ###
-  # Calls API for Adv Stats data and puts into dataframe format
-  #
-  # Inputs:
-  #   season: int/str
-  #   season_type: str (Default: Regular Season)
-  #   category: str (one of tracking categories found in dropdown at (https://www.nba.com/stats/players/advanced/))
-  #
-  # Returns:
-  #   synergy: dataframe
-  #
-  ###
-  #Call API
-  res <- .curl_nba_api(.advanced_stats_url(season, season_type, category))
-  #Isolate Data
-  adv_stats <- res[["resultSets"]][["rowSet"]][[1]] %>% 
-    as.data.frame()
-  #Add column names to Data
-  colnames(adv_stats) <-  res[["resultSets"]][["headers"]][[1]]
-  #Clean up column names
-  adv_stats <- adv_stats %>% 
-    janitor::clean_names()
-  
-  return(adv_stats)
-  
 }
 
 get_team_game_logs <- function(season, season_type = "Regular Season" , measure_type = "Base", date_from = '', date_to = ''){
@@ -469,7 +407,7 @@ get_game_logs <- function(season, league = "NBA", result_type = "Player", season
 
 get_game_shots <- function(season, season_type = "Regular Season", game_id){
   ###
-  # Calls API for Basic Game Logs data and puts into dataframe format
+  # Calls API for shots data and puts into dataframe format
   #
   # Inputs:
   #   season: int/str
@@ -522,7 +460,6 @@ get_synergy_stats <- function(season, season_type = "Regular Season", category){
     janitor::clean_names()
   
   return(synergy)
-  
 }
 
 get_tracking_stats <- function(season, season_type = "Regular Season", category){
@@ -583,28 +520,4 @@ get_team_shots_by_touch_time <- function(season, season_type = "Regular Season",
   
   return(touch_df)
   
-}
-
-# Other Helper Functions ---------------------------------------------------
-
-# Calculate Time Remaining for Each Quarter Box Score
-.calc_time_at_period <- function(period){
-  ###
-  # Used to calculate the correct range value for a given period for Adv Boxscore URL
-  #
-  # Inputs:
-  #   period: int
-  #
-  # Returns:
-  #   int
-  #
-  ###
-  
-  # Check if it overtime - Handled differently
-  if(period > 5){
-    return((720 * 4 + (period - 5) * (5*60)) * 10)
-  }
-  else{
-    return((720 * (period - 1)) * 10)
-  }
 }
