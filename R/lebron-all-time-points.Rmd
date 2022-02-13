@@ -1,0 +1,173 @@
+---
+title: "LeBron All-Time Points Leader"
+author: "Stephen Pelkofer"
+date: "1/9/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r message = FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggtext)
+library(ggrepel)
+library(showtext)
+font_add_google(name = "Sora", family = "Sora")
+showtext_auto()
+source("../functions/theme_sp.R")
+source("../functions/nba-stats-api.R")
+```
+
+# Data Prep
+
+## Get Game Logs
+
+```{r}
+game_logs <- tibble()
+
+for (year in 1959:2022) {
+  # Pull single season player game logs
+  game_logs <- bind_rows(
+    game_logs,
+    get_game_logs(season = year) %>% mutate(season = "Regular"),
+    get_game_logs(season = year, season_type = "Playoffs") %>% mutate(season = "Playoffs")
+  )
+}
+```
+
+## Top Players
+
+```{r}
+# Identify top 10 scorers of all time
+top_10_players <- game_logs %>%
+  group_by(PLAYER_ID, PLAYER_NAME) %>%
+  summarise(
+    seasons = n_distinct(SEASON_ID),
+    games = n(),
+    total_points = sum(as.integer(PTS), na.rm = T),
+    .groups = "drop"
+  ) %>% 
+  arrange(desc(total_points)) %>% 
+  head(10) %>% 
+  pull(PLAYER_ID)
+```
+
+## Points by Game
+
+```{r}
+# Group by player to get cumulative points at each game number
+points_by_game <- game_logs %>% 
+  mutate(GAME_DATE = as.Date(GAME_DATE)) %>% 
+  filter(PLAYER_ID %in% top_10_players) %>% 
+  group_by(PLAYER_ID, PLAYER_NAME) %>% 
+  arrange(PLAYER_ID, GAME_DATE) %>% 
+  mutate(
+    game_number = row_number(),
+    max_game = max(game_number),
+    cumulative_points = cumsum(as.integer(PTS))
+  ) %>% 
+  select(PLAYER_ID, PLAYER_NAME, game_number, FG3M, cumulative_points, max_game) %>% 
+  mutate(
+    # Label Name
+    label_name = case_when(
+      PLAYER_NAME == "Kareem Abdul-Jabbar" ~ "Kareem",
+      PLAYER_NAME == "Karl Malone" ~ "K.Malone",
+      PLAYER_NAME == "Kobe Bryant" ~ "Kobe",
+      PLAYER_NAME == "Michael Jordan" ~ "MJ",
+      PLAYER_NAME == "Hakeem Olajuwon" ~ "Dream",
+      PLAYER_NAME == "Wilt Chamberlain" ~ "Wilt",
+      PLAYER_NAME == "Tim Duncan" ~ "Timmy D",
+      PLAYER_NAME == "Dirk Nowitzki" ~ "Dirk",
+      PLAYER_NAME == "Shaquille O'Neal" ~ "Shaq",
+      TRUE ~ "LeBron"
+    )
+  )
+
+# LeBron Data
+lebron_id <- 2544
+lebron_df <- points_by_game %>% filter(PLAYER_ID == lebron_id)
+```
+
+# Data Viz
+
+```{r}
+ggplot(points_by_game %>% filter(PLAYER_ID != lebron_id)) +
+  # Top 10
+  geom_line(
+    aes(x = game_number, y = cumulative_points, group = PLAYER_NAME),
+    size = .7,
+    alpha = .6,
+    color = "#bdbdbd"
+  ) +
+  geom_point(
+    data = points_by_game %>% filter(game_number == max_game, PLAYER_ID != lebron_id),
+    aes(x = game_number, y = cumulative_points),
+    shape = 21,
+    size = 2,
+    fill = "#bdbdbd",
+    color = "white"
+  ) +
+  # Names
+  geom_text_repel(
+    data = points_by_game %>% filter(game_number == max_game, PLAYER_ID != lebron_id),
+    aes(x = game_number, y = cumulative_points, label = label_name),
+    size = 2.5,
+    min.segment.length = 1,
+    color = "#252525",
+    force = 1.5
+  ) +
+  # LeBron Only
+  geom_line(
+    data = lebron_df,
+    aes(x = game_number, y = cumulative_points, group = PLAYER_NAME),
+    size = 1.2,
+    alpha = 1,
+    color = "#552583"
+  ) +
+  geom_point(
+    data = lebron_df %>% filter(game_number == max_game),
+    aes(x = game_number, y = cumulative_points),
+    size = 3,
+    shape = 21,
+    fill = "#552583",
+    color = "white"
+  ) +
+  scale_y_continuous(
+    limits = c(0,55000),
+    breaks = c(10000,20000,30000,40000, 50000),
+    labels = c("10K\nPTS", "20K", "30K", "40K", "50K")
+  ) +
+  scale_x_continuous(
+    limits = c(0,2100),
+    expand = c(0,0),
+    breaks = c(500,1000,1500,2000),
+    labels = c("500 Games","1,000","1,500","2,000")
+  ) +
+  labs(
+    title = "<span style = 'color:#552583;'>LeBron</span> is definitely a scorer",
+    subtitle = "Top 10 in Total Points in NBA History, including Playoff Games",
+    y = "",
+    x = ""
+  ) +
+  theme_sp(
+      title_family = "Sora",
+      text_family = "Sora",
+      plots_pane = FALSE,
+      base_size = 14
+    ) +
+  theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      plot.subtitle = element_markdown(size = 12),
+      axis.ticks = element_line(color = "#252525"),
+      axis.ticks.length = unit(.25, "cm"),
+      axis.text = element_markdown(size = 12)
+  ) +
+  ggsave("lebron-pts.png", device = "png", width = 6.5, height = 4, dpi = 300)
+# Additional annotations added in Figma
+```
